@@ -1,60 +1,99 @@
 import telebot
-from telebot import types
 import utils
 
-
-TOKEN = ' '
+TOKEN = ''
 bot = telebot.TeleBot(TOKEN)
 
+lang = 'ru'
 
-@bot.message_handler(commands=['start'])
+
+@bot.message_handler(commands=['help', 'start'])
 def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button1 = types.InlineKeyboardButton("Конвертировать")
-    button2 = types.InlineKeyboardButton("Курс тона")
-    markup.add(button1, button2)
-    bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
-
-
-@bot.message_handler(content_types=['text'])
-def request_forecast(message: telebot.types.Message):
-    if message.text == "Курс тона":
-        msg = bot.send_message(message.chat.id, 'Чтобы узнать курс тона, введите код валюты (например USD)')
-        bot.register_next_step_handler(msg, get_ton_rate)
-
-    if message.text == "Конвертировать":
-        msg = bot.send_message(message.chat.id, 'Чтобы конвертировать валюту введите код валюты + количество (USD 100)')
-        bot.register_next_step_handler(msg, converter)
-
-
-def get_ton_rate(message: telebot.types.Message):
-    currency = message.text.upper()
-    if 1 < len(currency) < 5:
-        ans = utils.get_ton(currency)
-        if ans is not None:
-            bot.send_message(message.chat.id, ans + " " + currency)
-        else:
-            bot.send_message(message.chat.id, "Неправильно введена валюта")
+    global lang
+    if lang == 'ru':
+        bot.send_message(message.chat.id, "/help\n\n"
+                                          "/convert <token> <amount> - конвертирует выбранную вами валюту в TON\n\n"
+                                          "/price <token> - показывает курс тона к выбранной вами валюте\n\n"
+                                          "/language - выбор языка бота (ENG, RU)")
     else:
-        bot.send_message(message.chat.id, "Неправильно введена валюта")
+        bot.send_message(message.chat.id, "/help\n\n"
+                                          "/convert <token> <amount> - converts the currency of your choice to TON\n\n"
+                                          "/price <token> - показывает курс тона к выбранной вами валюте\n\n"
+                                          "/language - выбор языка бота (ENG, RU)")
 
 
-def converter(message: telebot.types.Message):
-    req = message.text.split()
-    if len(req) < 2:
+@bot.message_handler(regexp="/price")
+def request_forecast(message):
+    global lang
+    mes = message.text.upper()
+    if mes == '/PRICE' and lang == 'ru':
+        bot.send_message(message.chat.id, "Введенно недостаточно данных, попробуйте /price usdt")
+    elif mes == '/PRICE' and lang == 'eng':
+        bot.send_message(message.chat.id, "Not enough data entered, try /price usdt")
+    else:
+        mes = mes.replace('/PRICE ', '')
+        get_ton_rate(message, mes)
+
+
+def get_ton_rate(message, cur):
+    if 1 < len(cur) < 5:
+        ans = utils.get_ton(cur)
+        if ans is not None:
+            bot.send_message(message.chat.id, ans + " " + cur)
+        else:
+            translate_error_message(message)
+    else:
+        translate_error_message(message)
+
+
+@bot.message_handler(regexp="/convert")
+def request_forecast(message):
+    global lang
+    mes = message.text.upper()
+    if mes == '/CONVERT' and lang == 'ru':
+        bot.send_message(message.chat.id, "Введенно недостаточно данных, попробуйте /convert usdt 1000")
+    elif mes == '/CONVERT' and lang == 'eng':
+        bot.send_message(message.chat.id, "Not enough data entered, try /convert usdt 1000")
+    else:
+        mes = mes.replace('/CONVERT', '')
+        converter(mes.split(), message)
+
+
+@bot.message_handler(regexp="/language")
+def request_forecast(message):
+    global lang
+    mes = message.text.upper()
+    if mes == '/LANGUAGE RU':
+        lang = 'ru'
+    elif mes == '/LANGUAGE ENG':
+        lang = 'eng'
+    else:
+        bot.send_message(message.chat.id, "RU/ENG")
+
+
+def converter(req, message):
+    if len(req) > 1:
         currency = req[0].upper()
         count = float(req[1])
         if 1 < len(currency) < 5:
             ans = utils.get_ton(currency)
             if ans is not None:
                 res = utils.convert(count, float(ans))
-                bot.send_message(message.chat.id, res)
+                bot.send_message(message.chat.id, str(res) + ' TON')
             else:
-                bot.send_message(message.chat.id, "Неправильно введена валюта")
+                translate_error_message(message)
         else:
-            bot.send_message(message.chat.id, "Неправильно введена валюта")
+            translate_error_message(message)
     else:
-        bot.send_message(message.chat.id, "Неправильно введены данные")
+        translate_error_message(message)
+
+
+def translate_error_message(message):
+    global lang
+    if lang == 'ru':
+        return bot.send_message(message.chat.id, "Неправильно введена валюта")
+    else:
+        return bot.send_message(message.chat.id, "Currency entered incorrectly")
 
 
 bot.polling(none_stop=True)
